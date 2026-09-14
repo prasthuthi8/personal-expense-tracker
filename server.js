@@ -21,7 +21,10 @@ const db = mysql.createConnection({
 })
 
 db.connect(err => {
-  if (err) { console.error('❌ DB Error:', err.message); process.exit(1) }
+  if (err) { 
+    console.error('❌ DB Error Name:', err.code); 
+    console.error('❌ DB Error Message:', err.message);
+    process.exit(1);}
   console.log('✅ Connected to MySQL')
   db.query("SET NAMES 'utf8mb4'")
 

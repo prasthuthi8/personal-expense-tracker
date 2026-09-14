@@ -3,11 +3,6 @@
 --  Run this entire file in MySQL Workbench once
 -- ============================================================
 
-DROP DATABASE IF EXISTS personal_expense_tracker;
-CREATE DATABASE personal_expense_tracker;
-USE personal_expense_tracker;
-
-
 -- ============================================================
 --  TABLE 1: categories
 -- ============================================================

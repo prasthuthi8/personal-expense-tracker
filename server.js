@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express    = require('express')
 const mysql      = require('mysql2')
 const cors       = require('cors')
@@ -5,7 +6,7 @@ const jwt        = require('jsonwebtoken')
 const bcrypt     = require('bcryptjs')
 
 const app    = express()
-const SECRET = 'cashlens_secret_key_2025'
+const SECRET = process.env.JWT_SECRET || 'cashlens_secret_key_2025'
 
 app.use(cors())
 app.use(express.json())

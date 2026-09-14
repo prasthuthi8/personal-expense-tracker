@@ -8,7 +8,13 @@ const bcrypt     = require('bcryptjs')
 const app    = express()
 const SECRET = process.env.JWT_SECRET || 'cashlens_secret_key_2025'
 
-app.use(cors())
+
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://cashlens-seven.vercel.app'  // ← your Vercel URL
+  ]
+}))
 app.use(express.json())
 
 // ── Database ──────────────────────────────────────────────────

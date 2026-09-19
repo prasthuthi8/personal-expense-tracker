@@ -420,8 +420,8 @@ app.get('/audit', auth, (req, res) => {
 
 // ══════════════════════════════════════════════════════════════
 //  INCOME
---  Uses a separate income table (created on first run)
--- ══════════════════════════════════════════════════════════════
+// Uses a separate income table (created on first run)
+//══════════════════════════════════════════════════════════════
 app.get('/income', auth, (req, res) => {
   db.query(
     `CREATE TABLE IF NOT EXISTS income (

@@ -45,7 +45,7 @@ const otpStore = {}
 
 // ── Email transporter (Nodemailer + Gmail) ────────────────────
 const transporter = nodemailer.createTransport({
-    host: '://gmail.com',
+    host: 'smtp.gmail.com',
     port: 465,
     secure: true, // Forces a secure connection instantly to speed up delivery
     auth: {

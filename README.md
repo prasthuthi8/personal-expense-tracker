@@ -2,6 +2,7 @@
 
 Node.js + Express REST API for the CashLens personal expense tracker.
 
+🔗![CashLens Dashboard Preview](./dashboard-preview.png)
 🔗 **Frontend Repo:** [github.com/prasthuthi8/cashlens](https://github.com/prasthuthi8/cashlens)
 🔗 **Live API:** [cashlens-api.onrender.com](https://cashlens-api.onrender.com)
 🔗 **Live App:** [cashlens-seven.vercel.app](https://cashlens-seven.vercel.app)
@@ -128,15 +129,14 @@ DB_USER=root
 DB_PASSWORD=your_mysql_password
 DB_NAME=personal_expense_tracker
 JWT_SECRET=cashlens_secret_key_2025
-EMAIL_USER=your_gmail@gmail.com
-EMAIL_PASS=your_gmail_app_password
+RESEND_API_KEY=your_resend_api_key
 ```
+**Resend Email setup:**
 
-**Gmail App Password setup:**
-1. Go to Google Account → Security
-2. Enable 2-step verification
-3. Go to App Passwords → generate one
-4. Use that 16-character password as `EMAIL_PASS`
+1. Go to https://resend.com and create a free developer account.
+2. Generate an API Key under the "API Keys" section.
+3. Add that key to your Render Environment tab as `RESEND_API_KEY`.
+
 
 ### 4. Start server
 ```bash
@@ -169,8 +169,7 @@ DB_USER=railway_user
 DB_PASSWORD=railway_password
 DB_NAME=railway
 JWT_SECRET=your_strong_secret_key
-EMAIL_USER=your_gmail@gmail.com
-EMAIL_PASS=your_gmail_app_password
+RESEND_API_KEY=your_resend_api_key
 PORT=3000
 ```
 

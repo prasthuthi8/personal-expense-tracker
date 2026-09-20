@@ -1,13 +1,14 @@
 require('dotenv').config()
-const express  = require('express')
-const mysql    = require('mysql2')
-const cors     = require('cors')
-const jwt      = require('jsonwebtoken')
-const bcrypt   = require('bcryptjs')
-const nodemailer = require('nodemailer')
+const express = require('express')
+const mysql   = require('mysql2')
+const cors    = require('cors')
+const jwt     = require('jsonwebtoken')
+const bcrypt  = require('bcryptjs')
+const { Resend } = require('resend')
 
 const app    = express()
 const SECRET = process.env.JWT_SECRET || 'cashlens_secret_key_2025'
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 app.use(cors({
   origin: [
@@ -39,23 +40,9 @@ db.connect(err => {
 })
 
 
-// ── OTP store (in-memory for demo) ───────────────────────────
-// In production this should use Redis or a DB table
+// ── OTP store (in-memory) ─────────────────────────────────────
 const otpStore = {}
 
-// ── Email transporter (Nodemailer + Gmail) ────────────────────
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // Forces a secure connection instantly to speed up delivery
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    },
-    tls: {
-        rejectUnauthorized: false // Prevents local network blocks from slowing it down
-    }
-});
 
 // ── Auth middleware ───────────────────────────────────────────
 function auth(req, res, next) {
@@ -74,7 +61,7 @@ function auth(req, res, next) {
 //  OTP ROUTES
 // ══════════════════════════════════════════════════════════════
 
-// Send OTP to email
+// Send OTP to email via Resend
 app.post('/auth/send-otp', async (req, res) => {
   const { email } = req.body
   if (!email) return res.status(400).json({ error: 'Email is required' })
@@ -86,26 +73,28 @@ app.post('/auth/send-otp', async (req, res) => {
   otpStore[email] = { otp, expires }
 
   try {
-    await transporter.sendMail({
-      from:    `"CashLens" <${process.env.EMAIL_USER}>`,
+    await resend.emails.send({
+      from:    'CashLens <onboarding@resend.dev>',
       to:      email,
-      subject: 'Your CashLens OTP',
+      subject: 'CashLens — Your verification code',
       html: `
-        <div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;padding:2rem;border:1px solid #e0e0d8;border-radius:12px;">
+        <div style="font-family:Arial,sans-serif;max-width:420px;margin:0 auto;padding:2rem;border:1px solid #e0e0d8;border-radius:12px;">
           <h2 style="color:#185FA5;margin-bottom:8px;">💰 CashLens</h2>
           <p style="color:#555;margin-bottom:1.5rem;">Your one-time verification code is:</p>
           <div style="font-size:36px;font-weight:700;color:#1a1a1a;letter-spacing:8px;text-align:center;padding:1rem;background:#f5f5f0;border-radius:8px;margin-bottom:1.5rem;">
             ${otp}
           </div>
           <p style="color:#888;font-size:13px;">This OTP expires in 10 minutes. Do not share it with anyone.</p>
+          <hr style="border:none;border-top:1px solid #e0e0d8;margin:1rem 0;" />
+          <p style="color:#aaa;font-size:12px;">If you did not request this, please ignore this email.</p>
         </div>
       `
     })
-    console.log(`OTP sent to ${email}: ${otp}`)
+    console.log(`✅ OTP sent to ${email}`)
     res.json({ message: 'OTP sent to your email!' })
   } catch (e) {
-    console.error('Email error:', e.message)
-    // Fallback — return OTP in response for demo if email fails
+    console.error('Resend error:', e.message)
+    // Fallback — return OTP in response if Resend fails
     res.json({ message: 'OTP generated (demo mode)', demoOtp: otp })
   }
 })
@@ -113,7 +102,8 @@ app.post('/auth/send-otp', async (req, res) => {
 // Verify OTP
 app.post('/auth/verify-otp', (req, res) => {
   const { email, otp } = req.body
-  if (!email || !otp) return res.status(400).json({ error: 'Email and OTP required' })
+  if (!email || !otp)
+    return res.status(400).json({ error: 'Email and OTP required' })
 
   const stored = otpStore[email]
   if (!stored)
@@ -123,7 +113,6 @@ app.post('/auth/verify-otp', (req, res) => {
   if (stored.otp !== otp.toString())
     return res.status(400).json({ error: 'Incorrect OTP. Please try again.' })
 
-  // OTP verified — clear it
   delete otpStore[email]
   res.json({ message: 'OTP verified!', verified: true })
 })
@@ -143,20 +132,23 @@ app.post('/auth/register', async (req, res) => {
 
   try {
     const hashed = await bcrypt.hash(password, 10)
-    const sql = `INSERT INTO users (name, email, phone, password) VALUES (?, ?, ?, ?)`
-    db.query(sql, [name, email||null, phone||null, hashed], (err, result) => {
-      if (err) {
-        if (err.code === 'ER_DUP_ENTRY')
-          return res.status(400).json({ error: 'Email or phone already registered' })
-        return res.status(500).json({ error: err.message })
+    db.query(
+      'INSERT INTO users (name, email, phone, password) VALUES (?, ?, ?, ?)',
+      [name, email||null, phone||null, hashed],
+      (err, result) => {
+        if (err) {
+          if (err.code === 'ER_DUP_ENTRY')
+            return res.status(400).json({ error: 'Email or phone already registered' })
+          return res.status(500).json({ error: err.message })
+        }
+        const token = jwt.sign(
+          { id: result.insertId, name, email, phone },
+          SECRET,
+          { expiresIn: '7d' }
+        )
+        res.json({ message: 'Account created!', token, name })
       }
-      const token = jwt.sign(
-        { id: result.insertId, name, email, phone },
-        SECRET,
-        { expiresIn: '7d' }
-      )
-      res.json({ message: 'Account created!', token, name })
-    })
+    )
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -242,18 +234,14 @@ app.post('/expenses', auth, (req, res) => {
     return res.status(400).json({ error: 'Amount must be greater than 0' })
 
   const month = expense_date.slice(0, 7)
-  const sql   = `
-    INSERT INTO expenses
-      (name, amount, category_code, is_needed, note, expense_date, user_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `
   db.query(
-    sql,
+    `INSERT INTO expenses
+       (name, amount, category_code, is_needed, note, expense_date, user_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [name, amount, category_code, is_needed, note||'', expense_date, req.user.id],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
 
-      // Check budget after adding expense
       const checkSql = `
         SELECT
           COALESCE(ms.total_amount, 0) AS total_spent,
@@ -341,15 +329,16 @@ app.post('/budget', auth, (req, res) => {
   if (!month_year || !monthly_limit || monthly_limit <= 0)
     return res.status(400).json({ error: 'Valid month and budget amount required' })
 
-  const sql = `
-    INSERT INTO budget (month_year, monthly_limit, user_id)
-    VALUES (?, ?, ?)
-    ON DUPLICATE KEY UPDATE monthly_limit = VALUES(monthly_limit)
-  `
-  db.query(sql, [month_year, monthly_limit, req.user.id], err => {
-    if (err) return res.status(500).json({ error: err.message })
-    res.json({ message: 'Budget saved!', month_year, monthly_limit })
-  })
+  db.query(
+    `INSERT INTO budget (month_year, monthly_limit, user_id)
+     VALUES (?, ?, ?)
+     ON DUPLICATE KEY UPDATE monthly_limit = VALUES(monthly_limit)`,
+    [month_year, monthly_limit, req.user.id],
+    err => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json({ message: 'Budget saved!', month_year, monthly_limit })
+    }
+  )
 })
 
 
@@ -424,25 +413,24 @@ app.get('/audit', auth, (req, res) => {
 
 // ══════════════════════════════════════════════════════════════
 //  INCOME
-// Uses a separate income table (created on first run)
-//══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 app.get('/income', auth, (req, res) => {
   db.query(
     `CREATE TABLE IF NOT EXISTS income (
-       id         INT AUTO_INCREMENT PRIMARY KEY,
-       name       VARCHAR(255)   NOT NULL,
-       amount     DECIMAL(10,2)  NOT NULL,
-       category   VARCHAR(50)    NOT NULL DEFAULT 'salary',
-       note       VARCHAR(500),
+       id          INT AUTO_INCREMENT PRIMARY KEY,
+       name        VARCHAR(255)  NOT NULL,
+       amount      DECIMAL(10,2) NOT NULL,
+       category    VARCHAR(50)   NOT NULL DEFAULT 'salary',
+       note        VARCHAR(500),
        income_date DATE          NOT NULL,
-       created_at TIMESTAMP      DEFAULT CURRENT_TIMESTAMP,
-       user_id    INT,
+       created_at  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+       user_id     INT,
        CONSTRAINT fk_income_user
          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
     () => {
       db.query(
-        `SELECT * FROM income WHERE user_id = ? ORDER BY income_date DESC, created_at DESC`,
+        'SELECT * FROM income WHERE user_id = ? ORDER BY income_date DESC, created_at DESC',
         [req.user.id],
         (err, results) => {
           if (err) return res.status(500).json({ error: err.message })
@@ -491,14 +479,14 @@ app.delete('/income/:id', auth, (req, res) => {
 app.get('/goals', auth, (req, res) => {
   db.query(
     `CREATE TABLE IF NOT EXISTS savings_goals (
-       id           INT AUTO_INCREMENT PRIMARY KEY,
-       name         VARCHAR(255)   NOT NULL,
-       icon         VARCHAR(10)    DEFAULT '🎯',
-       target_amount DECIMAL(10,2) NOT NULL,
-       saved_amount  DECIMAL(10,2) DEFAULT 0,
-       deadline     DATE,
-       created_at   TIMESTAMP      DEFAULT CURRENT_TIMESTAMP,
-       user_id      INT,
+       id            INT AUTO_INCREMENT PRIMARY KEY,
+       name          VARCHAR(255)   NOT NULL,
+       icon          VARCHAR(10)    DEFAULT '🎯',
+       target_amount DECIMAL(10,2)  NOT NULL,
+       saved_amount  DECIMAL(10,2)  DEFAULT 0,
+       deadline      DATE,
+       created_at    TIMESTAMP      DEFAULT CURRENT_TIMESTAMP,
+       user_id       INT,
        CONSTRAINT fk_goal_user
          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,

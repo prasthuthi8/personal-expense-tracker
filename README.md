@@ -4,7 +4,7 @@ Node.js + Express REST API for the CashLens personal expense tracker.
 
 🔗![CashLens Dashboard Preview](./dashboard-preview.png)
 🔗 **Frontend Repo:** [github.com/prasthuthi8/cashlens](https://github.com/prasthuthi8/cashlens)
-🔗 **Live API:** [cashlens-api.onrender.com](https://cashlens-api.onrender.com)
+🔗 **Live API:** [cashlens-api-4xzg.onrender.com](https://cashlens-api-4xzg.onrender.com)
 🔗 **Live App:** [cashlens-seven.vercel.app](https://cashlens-seven.vercel.app)
 
 ---
